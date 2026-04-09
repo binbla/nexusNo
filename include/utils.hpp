@@ -8,7 +8,7 @@
 #include <string>
 #include <vector>
 
-#include "types.hpp"
+#include "crypto.hpp"
 
 namespace wg {
 
@@ -82,16 +82,7 @@ std::string bytes_to_hex(const std::vector<uint8_t>& data);
 
 /// Convert bytes array to hex string
 template <size_t N>
-std::string array_to_hex(const std::array<uint8_t, N>& data) {
-    std::string result;
-    result.reserve(N * 2);
-    for (uint8_t byte : data) {
-        char buf[3];
-        snprintf(buf, sizeof(buf), "%02x", byte);
-        result += buf;
-    }
-    return result;
-}
+std::string array_to_hex(const std::array<uint8_t, N>& data);
 
 /// Returns theTAI64N timestamp for the current time. Out 12 bytes, the first 8
 /// bytes being a big-endian integer of the number of seconds since 1970 TAI and

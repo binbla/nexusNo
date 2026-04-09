@@ -1,98 +1,58 @@
-#pragma once
+#include <span>
+#include <variant>
 
-#include <functional>
-#include <map>
-#include <memory>
-#include <optional>
-#include <string>
-#include <unordered_map>
-#include <vector>
-
-#include "network.hpp"
-#include "types.hpp"
+#include "crypto.hpp"
+#include "message.hpp"
+#include "noise.hpp"
+#include "peer.hpp"
+#include "socket.hpp"
 
 namespace wg {
 
-struct CoreConfig {
-    SelfIdentity identity{};
-    std::string listen_address;
-    uint16_t listen_port = 0;
+struct Config {
+    // 监听地址和端口
+    std::string listen_addr;
+    uint16_t listen_port;
+
+    PrivateKey private_key;
+    PublicKey public_key;
 };
 
-struct CoreCallbacks {
-    std::function<void(const Peer&)> on_peer_added;
-    std::function<void(const Peer&)> on_peer_removed;
-    std::function<void(const Peer&)> on_peer_updated;
-    std::function<void(const Peer&, const Session&)> on_session_installed;
-    std::function<void(const Peer&, const Session&)> on_session_removed;
-    std::function<void(const Peer&, const Endpoint&)> on_endpoint_updated;
-    std::function<void(const Peer&, const Endpoint&,
-                       const std::vector<uint8_t>&)>
-        on_transport_packet;
+// 索引表应该有能力定位握手状态（Handshake）或会话密钥（Keypair），以便快速处理收到的消息
+using IndexTarget = std::variant<Handshake*, Keypair*>;
+struct IndexEntry {
+    Peer* peer = nullptr;
+    IndexTarget target;
 };
 
 class Core {
    public:
-    explicit Core(std::unique_ptr<CryptoProvider> crypto_provider);
-    ~Core();
+    // 初始化
+    void init(Config config);
+    // 注册peer
+    void add_peer(const PeerConfig& config);  // 添加peer的时候就预计算static-static
+                                              // DH结果，存到peer里
+    // 注销peer
+    void remove_peer(const PublicKey& pubkey);
+    // 更新peer配置
+    void update_peer(const PeerConfig& config);
+    // 查看已注册的peer
+    std::vector<PublicKey> list_peers() const;
+    // 获取peer的内部信息 像是握手状态，IP地址等
+    std::optional<Peer> get_peer_info(const PublicKey& pubkey) const;
 
-    Core(const Core&) = delete;
-    Core& operator=(const Core&) = delete;
-    Core(Core&&) = delete;
-    Core& operator=(Core&&) = delete;
-
-    bool initialize(const CoreConfig& config);
-    void shutdown();
-
-    [[nodiscard]] bool is_initialized() const;
-
-    void set_callbacks(CoreCallbacks callbacks);
-
-    PeerId add_peer(const PublicKey& remote_static_public_key,
-                    std::optional<Endpoint> endpoint = std::nullopt);
-    bool update_peer_endpoint(PeerId peer_id,
-                              const std::optional<Endpoint>& endpoint);
-    bool remove_peer(PeerId peer_id);
-
-    Peer* find_peer(PeerId peer_id);
-    const Peer* find_peer(PeerId peer_id) const;
-    Peer* find_peer(const PublicKey& remote_static_public_key);
-    const Peer* find_peer(const PublicKey& remote_static_public_key) const;
-
-    std::vector<PeerId> list_peer_ids() const;
-
-    SessionInstallResult install_session(PeerId peer_id, SessionPtr session);
-    bool remove_session(SessionIndex local_index);
-
-    Session* find_session(SessionIndex local_index);
-    const Session* find_session(SessionIndex local_index) const;
-
-    bool on_udp_packet(const std::vector<uint8_t>& packet,
-                       const Endpoint& source);
-    void poll(uint64_t now_ms);
-
-    UdpSocket& socket();
-    const UdpSocket& socket() const;
-
-    const SelfIdentity& local_identity() const;
+    // 发送消息
+    bool send_to_peer(PublicKey& target, std::span<const uint8_t> plaintext);
+    // 处理收到的消息
+    void handle_incoming(std::span<const uint8_t> data, const Endpoint& src);
+    // 注册明文回调
+    using PlaintextCallback = std::function<void(
+        const PublicKey& peer, std::span<const uint8_t> plaintext)>;
 
    private:
-    std::unique_ptr<CryptoProvider> crypto_provider_;
-    UdpSocket socket_;
-    CoreConfig config_{};
-    CoreCallbacks callbacks_{};
-    bool initialized_ = false;
-    PeerId next_peer_id_ = 1;
-
-    std::unordered_map<PeerId, std::shared_ptr<Peer>> peers_by_id_;
-    std::map<PublicKey, PeerId> peer_ids_by_public_key_;
-    std::unordered_map<SessionIndex, SessionPtr> sessions_by_index_;
-
-    PeerId allocate_peer_id();
-    SessionIndex allocate_session_index();
-    bool store_session_index(const SessionPtr& session);
-    void remove_peer_sessions(const Peer& peer);
-    static uint64_t current_time_ms();
+    UdpSocket socket_;                                  // 负责网络 I/O
+    std::unique_ptr<CryptoProvider> crypto_;            // 负责加密操作
+    std::map<PublicKey, std::unique_ptr<Peer>> peers_;  // 管理 peer 状态
+    std::unordered_map<KeypairIndex, IndexEntry> index_table_;  // 定位
 };
-
 }  // namespace wg
