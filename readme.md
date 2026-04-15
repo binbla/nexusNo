@@ -254,7 +254,7 @@ flowchart LR
 - MTProto 更适合大型平台化通信系统
 - nexusNo 更适合小团队、实验型产品和私有化通信场景
 
-## 我们的定位：极客玩具: Keep it simple, and trust your users.
+## 我们的定位：极客玩具 Keep it simple, and trust your users.
 
 nexusNo 不是要和以上协议正面竞争，也不追求在所有维度“更先进”。
 
