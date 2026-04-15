@@ -82,27 +82,54 @@ class CryptoProvider {
                     SharedSecret& out) = 0;
 
     // ===================== AEAD =====================
+    // 这个接口单独输出，ciphertext 和 tag 分开存储
+    virtual void aead_encrypt_detached(const SymmetricKey& key,
+                                       const Nonce& nonce,
+                                       std::span<const uint8_t> ad,
+                                       std::span<const uint8_t> plaintext,
+                                       std::span<uint8_t> ciphertext,
+                                       Tag& tag) = 0;
+    // 这个接口会把 tag 附加在ciphertext 后面
     virtual void aead_encrypt(const SymmetricKey& key, const Nonce& nonce,
                               std::span<const uint8_t> ad,
                               std::span<const uint8_t> plaintext,
-                              std::span<uint8_t> ciphertext, Tag& tag) = 0;
+                              std::span<uint8_t> ciphertext) = 0;
 
+    // 同理
+    virtual bool aead_decrypt_detached(const SymmetricKey& key,
+                                       const Nonce& nonce,
+                                       std::span<const uint8_t> ad,
+                                       std::span<const uint8_t> ciphertext,
+                                       const Tag& tag,
+                                       std::span<uint8_t> plaintext) = 0;
+    // 同理
     virtual bool aead_decrypt(const SymmetricKey& key, const Nonce& nonce,
                               std::span<const uint8_t> ad,
                               std::span<const uint8_t> ciphertext,
-                              const Tag& tag, std::span<uint8_t> plaintext) = 0;
+                              std::span<uint8_t> plaintext) = 0;
 
     // ===================== XAEAD =====================
 
+    virtual void xaead_encrypt_detached(const SymmetricKey& key,
+                                        const XNonce& nonce,
+                                        std::span<const uint8_t> ad,
+                                        std::span<const uint8_t> plaintext,
+                                        std::span<uint8_t> ciphertext,
+                                        Tag& tag) = 0;
     virtual void xaead_encrypt(const SymmetricKey& key, const XNonce& nonce,
                                std::span<const uint8_t> ad,
                                std::span<const uint8_t> plaintext,
-                               std::span<uint8_t> ciphertext, Tag& tag) = 0;
+                               std::span<uint8_t> ciphertext) = 0;
 
+    virtual bool xaead_decrypt_detached(const SymmetricKey& key,
+                                        const XNonce& nonce,
+                                        std::span<const uint8_t> ad,
+                                        std::span<const uint8_t> ciphertext,
+                                        const Tag& tag,
+                                        std::span<uint8_t> plaintext) = 0;
     virtual bool xaead_decrypt(const SymmetricKey& key, const XNonce& nonce,
                                std::span<const uint8_t> ad,
                                std::span<const uint8_t> ciphertext,
-                               const Tag& tag,
                                std::span<uint8_t> plaintext) = 0;
 
     // ===================== Hash =====================

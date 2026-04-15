@@ -1,13 +1,13 @@
 #pragma once
 
 #include <cstdint>
+#include <map>
+#include <optional>
 #include <string>
 
 #include "noise.hpp"
 
 namespace wg {
-// 一个peer有什么东西？
-// 自己的公钥
 
 struct PeerConfig {
     PublicKey remote_static;
@@ -27,7 +27,6 @@ class Peer {
 
     const PublicKey& remote_static() const { return remote_static_; }
     const SymmetricKey& preshared_key() const { return preshared_key_; }
-
     void set_preshared_key(const SymmetricKey& psk) { preshared_key_ = psk; }
 
     // -------- endpoint --------
@@ -42,6 +41,8 @@ class Peer {
         return precomputed_static_static_;
     }
     void set_precomputed_static_static(const SharedSecret&);
+    Handshake& handshake() { return handshake_; }
+    KeypairManager& keypairs() { return keypairs_; }
 
    private:
     // peer 的长期身份信息
@@ -72,4 +73,14 @@ class Peer {
     bool is_alive = true;
 };
 
+class PeerManager {
+   public:
+    // 提供查找、添加、删除peer的接口
+    Peer* find_by_public_key(const PublicKey& key);
+    void add_peer(std::unique_ptr<Peer> peer);  // 同时具备update
+    void remove_peer(const PublicKey& key);
+
+   private:
+    std::map<PublicKey, std::unique_ptr<Peer>> peers_;
+};
 }  // namespace wg

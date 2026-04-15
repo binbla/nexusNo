@@ -30,16 +30,7 @@ class Core {
     // 初始化
     void init(Config config);
     // 注册peer
-    void add_peer(const PeerConfig& config);  // 添加peer的时候就预计算static-static
-                                              // DH结果，存到peer里
-    // 注销peer
-    void remove_peer(const PublicKey& pubkey);
-    // 更新peer配置
-    void update_peer(const PeerConfig& config);
-    // 查看已注册的peer
-    std::vector<PublicKey> list_peers() const;
-    // 获取peer的内部信息 像是握手状态，IP地址等
-    std::optional<Peer> get_peer_info(const PublicKey& pubkey) const;
+    PeerManager getPeers() const;
 
     // 发送消息
     bool send_to_peer(PublicKey& target, std::span<const uint8_t> plaintext);
@@ -50,9 +41,22 @@ class Core {
         const PublicKey& peer, std::span<const uint8_t> plaintext)>;
 
    private:
-    UdpSocket socket_;                                  // 负责网络 I/O
-    std::unique_ptr<CryptoProvider> crypto_;            // 负责加密操作
-    std::map<PublicKey, std::unique_ptr<Peer>> peers_;  // 管理 peer 状态
+    UdpSocket socket_;                        // 负责网络 I/O
+    std::unique_ptr<CryptoProvider> crypto_;  // 负责加密操作
+    // std::map<PublicKey, std::unique_ptr<Peer>> peers_;  // 管理 peer 状态
+    PeerManager peers_;
     std::unordered_map<KeypairIndex, IndexEntry> index_table_;  // 定位
+    /*
+    index_table_ --> (index, sessionEntry) // index
+    是session的索引，Entry是Keypair的入口
+
+    sessionEntry --> (peer, sessionItem) //
+    单个sessionEntry必须标识清楚归属Peer, 然后才是整个session的入口
+    session 自己有能力标识自己是握手还是已经完成建联
+
+    session的创建由core完成，初始化则交给noise完成
+
+
+    */
 };
 }  // namespace wg

@@ -459,6 +459,7 @@ static void message_ephemeral(u8 ephemeral_dst[NOISE_PUBLIC_KEY_LEN],
                               u8 hash[NOISE_HASH_LEN]) {
     if (ephemeral_dst != ephemeral_src)
         memcpy(ephemeral_dst, ephemeral_src, NOISE_PUBLIC_KEY_LEN);
+
     mix_hash(hash, ephemeral_src, NOISE_PUBLIC_KEY_LEN);
     kdf(chaining_key, NULL, NULL, ephemeral_src, NOISE_HASH_LEN, 0, 0,
         NOISE_PUBLIC_KEY_LEN, chaining_key);

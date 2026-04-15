@@ -88,33 +88,44 @@ std::string array_to_hex(const std::array<uint8_t, N>& data);
 /// bytes being a big-endian integer of the number of seconds since 1970 TAI and
 /// the last 4 bytes being a big-endian integer of the number of nanoseconds
 /// from the beginning of that second.
-inline Timestamp tai64n_timestamp() {
-    std::array<uint8_t, 12> timestamp{};
+inline Timestamp tai64n_now() {
+    Timestamp out{};
+
     auto now = std::chrono::system_clock::now();
-    auto epoch_seconds =
-        std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch())
-            .count() +
-        37;  // Add 37 seconds to convert from Unix time (UTC) to TAI
-    auto nanoseconds = std::chrono::duration_cast<std::chrono::nanoseconds>(
-                           now.time_since_epoch())
-                           .count() %
-                       1000000000;
+    auto since_epoch = now.time_since_epoch();
 
-    // Write big-endian seconds
+    uint64_t sec = static_cast<uint64_t>(
+        std::chrono::duration_cast<std::chrono::seconds>(since_epoch).count());
+
+    uint32_t nsec = static_cast<uint32_t>(
+        std::chrono::duration_cast<std::chrono::nanoseconds>(since_epoch)
+            .count() %
+        1'000'000'000ULL);
+
+    // 如果你有自己的 INITIATIONS_PER_SECOND，这里按 WG 一样降精度
+    constexpr uint32_t INITIATIONS_PER_SECOND = 50;  // 示例
+    constexpr uint32_t NSEC_PER_SEC = 1'000'000'000U;
+
+    uint32_t quantum = 1;
+    uint32_t target = NSEC_PER_SEC / INITIATIONS_PER_SECOND;
+    while ((quantum << 1) <= target) {
+        quantum <<= 1;
+    }
+    nsec = (nsec / quantum) * quantum;
+
+    uint64_t tai64_sec = 0x400000000000000aULL + sec;
+
     for (int i = 0; i < 8; ++i) {
-        timestamp[7 - i] = static_cast<uint8_t>(epoch_seconds & 0xFF);
-        epoch_seconds >>= 8;
+        out[7 - i] = static_cast<uint8_t>(tai64_sec & 0xff);
+        tai64_sec >>= 8;
     }
-
-    // Write big-endian nanoseconds
     for (int i = 0; i < 4; ++i) {
-        timestamp[11 - i] = static_cast<uint8_t>(nanoseconds & 0xFF);
-        nanoseconds >>= 8;
+        out[11 - i] = static_cast<uint8_t>(nsec & 0xff);
+        nsec >>= 8;
     }
 
-    return timestamp;
-};
-
+    return out;
+}
 // 字节序处理
 inline void write_u32_le(std::vector<uint8_t>& out, uint32_t value) {
     out.push_back(static_cast<uint8_t>(value & 0xff));

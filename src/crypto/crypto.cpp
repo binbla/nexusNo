@@ -69,16 +69,18 @@ class SodiumCryptoProvider : public CryptoProvider {
 
     // ===================== AEAD =====================
     // nonce 完全由计数器决定（非随机）WireGuard 数据包加密（data packets）
-    void aead_encrypt(const SymmetricKey& key, const Nonce& nonce,
-                      std::span<const uint8_t> ad,
-                      std::span<const uint8_t> plaintext,
-                      std::span<uint8_t> ciphertext, Tag& tag) override {
+
+    void aead_encrypt_detached(const SymmetricKey& key, const Nonce& nonce,
+                               std::span<const uint8_t> ad,
+                               std::span<const uint8_t> plaintext,
+                               std::span<uint8_t> ciphertext,
+                               Tag& tag) override {
         assert(ciphertext.size() == plaintext.size());
         assert(is_wireguard_aead_nonce(nonce));
 
-        unsigned long long mac_len = 0;
+        unsigned long long tag_len = 0;
         const int rc = crypto_aead_chacha20poly1305_ietf_encrypt_detached(
-            ptr_or_null(ciphertext), tag.data(), &mac_len,
+            ptr_or_null(ciphertext), tag.data(), &tag_len,
             ptr_or_null(plaintext),
             static_cast<unsigned long long>(plaintext.size()), ptr_or_null(ad),
             static_cast<unsigned long long>(ad.size()),
@@ -86,14 +88,34 @@ class SodiumCryptoProvider : public CryptoProvider {
             nonce.data(), key.data());
 
         assert(rc == 0);
-        assert(mac_len == TAG_SIZE);
+        assert(tag_len == TAG_SIZE);
     }
 
-    [[nodiscard]] bool aead_decrypt(const SymmetricKey& key, const Nonce& nonce,
-                                    std::span<const uint8_t> ad,
-                                    std::span<const uint8_t> ciphertext,
-                                    const Tag& tag,
-                                    std::span<uint8_t> plaintext) override {
+    // combined 模式，直接把 tag 附加在 ciphertext 后面，减少一次内存复制
+    void aead_encrypt(const SymmetricKey& key, const Nonce& nonce,
+                      std::span<const uint8_t> ad,
+                      std::span<const uint8_t> plaintext,
+                      std::span<uint8_t> ciphertext) override {
+        assert(ciphertext.size() == plaintext.size() + TAG_SIZE);
+        assert(is_wireguard_aead_nonce(nonce));
+
+        unsigned long long ciphertext_len = 0;
+        const int rc = crypto_aead_chacha20poly1305_ietf_encrypt(
+            ptr_or_null(ciphertext), &ciphertext_len, ptr_or_null(plaintext),
+            static_cast<unsigned long long>(plaintext.size()), ptr_or_null(ad),
+            static_cast<unsigned long long>(ad.size()),
+            nullptr,  // nsec, unused
+            nonce.data(), key.data());
+
+        assert(rc == 0);
+        assert(ciphertext_len == ciphertext.size());
+    }
+
+    // 没有用，如果要使用就要做一些修改
+    [[nodiscard]] bool aead_decrypt_detached(
+        const SymmetricKey& key, const Nonce& nonce,
+        std::span<const uint8_t> ad, std::span<const uint8_t> ciphertext,
+        const Tag& tag, std::span<uint8_t> plaintext) override {
         if (plaintext.size() != ciphertext.size()) {
             return false;
         }
@@ -112,12 +134,34 @@ class SodiumCryptoProvider : public CryptoProvider {
         return rc == 0;
     }
 
+    [[nodiscard]] bool aead_decrypt(const SymmetricKey& key, const Nonce& nonce,
+                                    std::span<const uint8_t> ad,
+                                    std::span<const uint8_t> ciphertext,
+                                    std::span<uint8_t> plaintext) override {
+        // plaintext 是上层提供的缓冲区，大小应该不会出问题。
+        // 跟解密失败无关
+        assert(plaintext.size() == ciphertext.size() + TAG_SIZE);
+        assert(is_wireguard_aead_nonce(nonce));
+
+        unsigned long long plaintext_len = 0;
+        const int rc = crypto_aead_chacha20poly1305_ietf_decrypt(
+            ptr_or_null(plaintext), &plaintext_len,
+            nullptr,  // nsec, unused
+            ptr_or_null(ciphertext),
+            static_cast<unsigned long long>(ciphertext.size()), ptr_or_null(ad),
+            static_cast<unsigned long long>(ad.size()), nonce.data(),
+            key.data());
+        assert(plaintext_len == plaintext.size());
+        return rc == 0;
+    }
+
     // ===================== XAEAD =====================
     // 随机 24-byte nonce 握手 / cookie / session 相关加密
-    void xaead_encrypt(const SymmetricKey& key, const XNonce& nonce,
-                       std::span<const uint8_t> ad,
-                       std::span<const uint8_t> plaintext,
-                       std::span<uint8_t> ciphertext, Tag& tag) override {
+    void xaead_encrypt_detached(const SymmetricKey& key, const XNonce& nonce,
+                                std::span<const uint8_t> ad,
+                                std::span<const uint8_t> plaintext,
+                                std::span<uint8_t> ciphertext,
+                                Tag& tag) override {
         assert(ciphertext.size() == plaintext.size());
 
         unsigned long long mac_len = 0;
@@ -132,13 +176,28 @@ class SodiumCryptoProvider : public CryptoProvider {
         assert(rc == 0);
         assert(mac_len == TAG_SIZE);
     }
+    void xaead_encrypt(const SymmetricKey& key, const XNonce& nonce,
+                       std::span<const uint8_t> ad,
+                       std::span<const uint8_t> plaintext,
+                       std::span<uint8_t> ciphertext) override {
+        assert(ciphertext.size() == plaintext.size());
 
-    [[nodiscard]] bool xaead_decrypt(const SymmetricKey& key,
-                                     const XNonce& nonce,
-                                     std::span<const uint8_t> ad,
-                                     std::span<const uint8_t> ciphertext,
-                                     const Tag& tag,
-                                     std::span<uint8_t> plaintext) override {
+        unsigned long long ciphertext_len = 0;
+        const int rc = crypto_aead_xchacha20poly1305_ietf_encrypt(
+            ptr_or_null(ciphertext), &ciphertext_len, ptr_or_null(plaintext),
+            static_cast<unsigned long long>(plaintext.size()), ptr_or_null(ad),
+            static_cast<unsigned long long>(ad.size()),
+            nullptr,  // nsec, unused
+            nonce.data(), key.data());
+
+        assert(rc == 0);
+        assert(ciphertext_len == ciphertext.size());
+    }
+
+    [[nodiscard]] bool xaead_decrypt_detached(
+        const SymmetricKey& key, const XNonce& nonce,
+        std::span<const uint8_t> ad, std::span<const uint8_t> ciphertext,
+        const Tag& tag, std::span<uint8_t> plaintext) override {
         if (plaintext.size() != ciphertext.size()) {
             return false;
         }
@@ -150,6 +209,27 @@ class SodiumCryptoProvider : public CryptoProvider {
             static_cast<unsigned long long>(ciphertext.size()), tag.data(),
             ptr_or_null(ad), static_cast<unsigned long long>(ad.size()),
             nonce.data(), key.data());
+
+        return rc == 0;
+    }
+    [[nodiscard]] bool xaead_decrypt(const SymmetricKey& key,
+                                     const XNonce& nonce,
+                                     std::span<const uint8_t> ad,
+                                     std::span<const uint8_t> ciphertext,
+                                     std::span<uint8_t> plaintext) override {
+        if (plaintext.size() != ciphertext.size()) {
+            return false;
+        }
+
+        unsigned long long plaintext_len = 0;
+        const int rc = crypto_aead_xchacha20poly1305_ietf_decrypt(
+            ptr_or_null(plaintext), &plaintext_len,
+            nullptr,  // nsec, unused
+            ptr_or_null(ciphertext),
+            static_cast<unsigned long long>(ciphertext.size()), ptr_or_null(ad),
+            static_cast<unsigned long long>(ad.size()), nonce.data(),
+            key.data());
+        assert(plaintext_len == plaintext.size());  // 一般不会出问题
 
         return rc == 0;
     }

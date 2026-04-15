@@ -10,6 +10,7 @@
 #include "endpoint.hpp"
 #include "message.hpp"
 #include "peer.hpp"
+#include "utils.hpp"
 // bytes，Noise协议的构造字符串，这里包含了\0所以使用sizeof的时候要-1
 // 静态编译期计算，不操心效率问题
 constexpr const uint8_t* handshake_name =
@@ -18,6 +19,10 @@ constexpr const uint8_t* handshake_name =
 constexpr const uint8_t* identifier_name =
     "WireGuard v1.x binbla admin@binbla.com";  // 38
 
+/*
+noise 协议的操作对象好像也就那么几个，time, ck, key, hash, ...
+
+*/
 namespace wg {
 // Receiver index type used in messages
 using KeypairIndex = uint32_t;
@@ -45,7 +50,12 @@ struct DirectionalKey {
 };
 
 struct Keypair {
-    // 密钥
+    /*
+    Keypair 指定了一个session
+    key的生命周期和状态，包含发送和接收两个方向的密钥，以及相关的计数器和索引信息。
+    它是Noise协议中一个重要的抽象，用于管理会话密钥的更新和过期。
+    */
+    // 密钥 这是双方在本轮会话中使用的密钥，发送和接收方向不同
     DirectionalKey sending;
     DirectionalKey receiving;
     // 计数器
@@ -166,8 +176,8 @@ struct Handshake {
     SymmetricKey preshared_key{};    // 可选的预共享密钥
 
     // Noise 协议的状态变量，跟握手消息的处理密切相关
-    Hash hash{};
-    ChainingKey chaining_key{};
+    Hash hash{};                 // h
+    ChainingKey chaining_key{};  // ck
 
     // 用于 initiation replay protection
     Timestamp latest_timestamp{};
@@ -222,9 +232,9 @@ class NoiseProtocol {
     void handshake_init(Handshake& hs, const PublicKey& remote_static);
 
     // 握手 第一条
-    bool create_initiation(Peer& peer, HandshakeInitiation& out);
-    Peer* consume_initiation(const HandshakeInitiation& msg,
-                             std::span<Peer* const> peers);
+    bool create_initiation(Peer& peer, KeypairIndex local_index,
+                           HandshakeInitiation& out);
+    Peer* consume_initiation(const HandshakeInitiation& msg, PeerManager peers);
 
     // 握手 第二条
     bool create_response(Peer& peer, HandshakeResponse& out);
@@ -261,6 +271,8 @@ class NoiseProtocol {
     void derive_keys(DirectionalKey& first_dst, DirectionalKey& second_dst,
                      const ChainingKey& chaining_key, uint64_t birthdate);
     void handshake_init(Handshake& hs, const PublicKey& remote_static);
+    void handshake_init(ChainingKey& ck, Hash& hash,
+                        const PublicKey& remote_static);  // 重载版本
     void mix_hash(Hash& hash, std::span<const uint8_t> src);
     bool mix_dh(ChainingKey& ck, SymmetricKey& key, const PrivateKey& priv,
                 const PublicKey& pub);
