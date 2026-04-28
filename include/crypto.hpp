@@ -68,6 +68,7 @@ class CryptoProvider {
     virtual void generate_static_keypair(PrivateKey& priv, PublicKey& pub) = 0;
 
     // 生成临时密钥对（每次握手使用）
+    // 其实直接调用上面那个
     virtual void generate_ephemeral_keypair(PrivateKey& priv,
                                             PublicKey& pub) = 0;
 
@@ -77,66 +78,83 @@ class CryptoProvider {
     // ===================== DH =====================
 
     // 计算 DH 输出，返回 false 表示失败（如无效公钥）
-
+    // 椭圆曲线乘法，返回一个长度为 32 的字节数组 从私钥和公钥计算共享密钥secret
     virtual bool dh(const PrivateKey& priv, const PublicKey& pub,
                     SharedSecret& out) = 0;
 
     // ===================== AEAD =====================
+    // Authenticated Encryption with Associated Data (AEAD)
+    // 用于加密数据，并对额外的一段数据进行签名
     // 这个接口单独输出，ciphertext 和 tag 分开存储
-    virtual void aead_encrypt_detached(const SymmetricKey& key,
-                                       const Nonce& nonce,
-                                       std::span<const uint8_t> ad,
-                                       std::span<const uint8_t> plaintext,
-                                       std::span<uint8_t> ciphertext,
-                                       Tag& tag) = 0;
-    // 这个接口会把 tag 附加在ciphertext 后面
-    virtual void aead_encrypt(const SymmetricKey& key, const Nonce& nonce,
-                              std::span<const uint8_t> ad,
-                              std::span<const uint8_t> plaintext,
-                              std::span<uint8_t> ciphertext) = 0;
+    virtual void aead_encrypt_detached(
+        const SymmetricKey& key,             // 加密密钥
+        const Nonce& nonce,                  // ChaCha20-Poly1305 nonce
+        std::span<const uint8_t> ad,         // 认证但不加密的数据
+        std::span<const uint8_t> plaintext,  // 待加密的明文
+        std::span<uint8_t> ciphertext,       // 输出的密文
+        Tag& tag) = 0;                       // 输出的认证标签
+    // 同理
+    virtual bool aead_decrypt_detached(
+        const SymmetricKey& key,              // 密钥
+        const Nonce& nonce,                   // ChaCha20-Poly1305 nonce
+        std::span<const uint8_t> ad,          // 认证但不加密的数据
+        std::span<const uint8_t> ciphertext,  // 待解密的密文
+        const Tag& tag,                       // 认证标签
+        std::span<uint8_t> plaintext) = 0;    // 输出的明文
+
+    // 这个接口会把 tag 附加在ciphertext 后面 也就是tag不再单独存储
+    virtual void aead_encrypt(
+        const SymmetricKey& key,             // 密钥
+        const Nonce& nonce,                  // ChaCha20-Poly1305 nonce
+        std::span<const uint8_t> ad,         // 认证但不加密的数据
+        std::span<const uint8_t> plaintext,  // 待加密的明文
+        std::span<uint8_t> ciphertext) = 0;  // 输出的密文（包含tag）
 
     // 同理
-    virtual bool aead_decrypt_detached(const SymmetricKey& key,
-                                       const Nonce& nonce,
-                                       std::span<const uint8_t> ad,
-                                       std::span<const uint8_t> ciphertext,
-                                       const Tag& tag,
-                                       std::span<uint8_t> plaintext) = 0;
-    // 同理
-    virtual bool aead_decrypt(const SymmetricKey& key, const Nonce& nonce,
-                              std::span<const uint8_t> ad,
-                              std::span<const uint8_t> ciphertext,
-                              std::span<uint8_t> plaintext) = 0;
+    virtual bool aead_decrypt(
+        const SymmetricKey& key,              // 密钥
+        const Nonce& nonce,                   // ChaCha20-Poly1305 nonce
+        std::span<const uint8_t> ad,          // 认证但不加密的数据
+        std::span<const uint8_t> ciphertext,  // 待解密的密文（包含tag）
+        std::span<uint8_t> plaintext) = 0;    // 输出的明文
 
     // ===================== XAEAD =====================
+    // XAEAD 是指带 nonce 的 AEAD 算法XChaCha20-Poly1305
+    virtual void xaead_encrypt_detached(
+        const SymmetricKey& key,             // 密钥
+        const XNonce& nonce,                 // XChaCha20 nonce
+        std::span<const uint8_t> ad,         // 认证但不加密的数据
+        std::span<const uint8_t> plaintext,  // 待加密的明文
+        std::span<uint8_t> ciphertext,       // 输出的密文
+        Tag& tag) = 0;                       // 输出的认证标签
+    virtual bool xaead_decrypt_detached(
+        const SymmetricKey& key,              // 密钥
+        const XNonce& nonce,                  // XChaCha20 nonce
+        std::span<const uint8_t> ad,          // 认证但不加密的数据
+        std::span<const uint8_t> ciphertext,  // 待解密的密文
+        const Tag& tag,                       // 认证标签
+        std::span<uint8_t> plaintext) = 0;    // 输出的明文
+    virtual void xaead_encrypt(
+        const SymmetricKey& key,             // 密钥
+        const XNonce& nonce,                 // XChaCha20 nonce
+        std::span<const uint8_t> ad,         // 认证但不加密的数据
+        std::span<const uint8_t> plaintext,  // 待加密的明文
+        std::span<uint8_t> ciphertext) = 0;  // 输出的密文（包含tag）
 
-    virtual void xaead_encrypt_detached(const SymmetricKey& key,
-                                        const XNonce& nonce,
-                                        std::span<const uint8_t> ad,
-                                        std::span<const uint8_t> plaintext,
-                                        std::span<uint8_t> ciphertext,
-                                        Tag& tag) = 0;
-    virtual void xaead_encrypt(const SymmetricKey& key, const XNonce& nonce,
-                               std::span<const uint8_t> ad,
-                               std::span<const uint8_t> plaintext,
-                               std::span<uint8_t> ciphertext) = 0;
-
-    virtual bool xaead_decrypt_detached(const SymmetricKey& key,
-                                        const XNonce& nonce,
-                                        std::span<const uint8_t> ad,
-                                        std::span<const uint8_t> ciphertext,
-                                        const Tag& tag,
-                                        std::span<uint8_t> plaintext) = 0;
-    virtual bool xaead_decrypt(const SymmetricKey& key, const XNonce& nonce,
-                               std::span<const uint8_t> ad,
-                               std::span<const uint8_t> ciphertext,
-                               std::span<uint8_t> plaintext) = 0;
+    virtual bool xaead_decrypt(
+        const SymmetricKey& key,              // 密钥
+        const XNonce& nonce,                  // XChaCha20 nonce
+        std::span<const uint8_t> ad,          // 认证但不加密的数据
+        std::span<const uint8_t> ciphertext,  // 待解密的密文（包含tag）
+        std::span<uint8_t> plaintext) = 0;    // 输出的明文
 
     // ===================== Hash =====================
+    // 哈希算法用于计算一段消息的哈希值 输出32位
     virtual void hash(std::span<const uint8_t> data, Hash& out) = 0;
+    // 这个接口是专门为Noise协议设计的，输入是两段数据，输出是它们的组合哈希值
     virtual void hash2(std::span<const uint8_t> a, std::span<const uint8_t> b,
                        Hash& out) = 0;  // noise 要用。但不算是密码学原语操作
-
+    // 消息认证码算法 Message Authentication Code(MAC) 用于生成一段消息的标签
     virtual void mac(std::span<const uint8_t> data,
                      std::span<const uint8_t> key, Mac& out) = 0;
 

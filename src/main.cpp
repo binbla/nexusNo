@@ -1,6 +1,7 @@
 #include <sys/epoll.h>
 
 #include "../include/crypto.hpp"
+#include "../include/crypto/crypto.hpp"
 #include "../include/endpoint.hpp"
 #include "../include/socket.hpp"
 #include "../include/utils.hpp"

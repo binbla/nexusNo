@@ -11,7 +11,7 @@ namespace wg {
 
 struct PeerConfig {
     PublicKey remote_static;
-    SymmetricKey preshared_key{};
+    PreSharedKey preshared_key{};
     std::optional<Endpoint> endpoint;
 };
 class Peer {
@@ -26,8 +26,8 @@ class Peer {
     // -------- identity / config --------
 
     const PublicKey& remote_static() const { return remote_static_; }
-    const SymmetricKey& preshared_key() const { return preshared_key_; }
-    void set_preshared_key(const SymmetricKey& psk) { preshared_key_ = psk; }
+    const PreSharedKey& preshared_key() const { return preshared_key_; }
+    void set_preshared_key(const PreSharedKey& psk) { preshared_key_ = psk; }
 
     // -------- endpoint --------
 
@@ -41,21 +41,21 @@ class Peer {
         return precomputed_static_static_;
     }
     void set_precomputed_static_static(const SharedSecret&);
-    Handshake& handshake() { return handshake_; }
+    Handshake& handshake() { return handshake_; }  // 返回的是引用，方便外部修改
     KeypairManager& keypairs() { return keypairs_; }
 
    private:
-    // peer 的长期身份信息
+    // peer 的长期身份信息 自己存一个，hs还要存一个。
     PublicKey remote_static_{};     // 跟Handshake重复了
-    SymmetricKey preshared_key_{};  // 跟Handshake重复了
+    PreSharedKey preshared_key_{};  // 跟Handshake重复了
     std::optional<Endpoint> endpoint_;
 
     // 与 peer 绑定的长期预计算缓存
     // 提前计算
     SharedSecret precomputed_static_static_{};
 
-    // 运行时状态
-    Handshake handshake_;
+    // 运行时状态 Handshake 和 KeypairManager
+    Handshake handshake_;  // 静态分配空间，避免后续频繁new/delete
     KeypairManager keypairs_;
 
     // ===== state =====

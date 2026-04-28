@@ -166,14 +166,14 @@ struct Handshake {
     KeypairIndex local_index = 0;   // 本端索引
     KeypairIndex remote_index = 0;  // 对端索引：对方包里的 sender_index
 
-    // 用于 initiation flood control
-    uint64_t last_initiation_consumption = 0;
-
     // Noise 握手中间状态
+    // 初始化之后就完成固定
+    PublicKey remote_static{};     // 对端长期公钥
+    SymmetricKey preshared_key{};  // 可选的预共享密钥
+
+    // 在clear_runtime的时候会被清空
     PrivateKey ephemeral_private{};  // 本地临时私钥
-    PublicKey remote_static{};       // 对端长期公钥
     PublicKey remote_ephemeral{};    // 对端临时公钥
-    SymmetricKey preshared_key{};    // 可选的预共享密钥
 
     // Noise 协议的状态变量，跟握手消息的处理密切相关
     Hash hash{};                 // h
@@ -181,7 +181,8 @@ struct Handshake {
 
     // 用于 initiation replay protection
     Timestamp latest_timestamp{};
-
+    // 用于 initiation flood control
+    Timestamp last_initiation_consumption{};
     // -------- helper --------
 
     void clear_runtime() {
@@ -229,12 +230,15 @@ class NoiseProtocol {
     void wg_noise_precompute_static_static(PrivateKey local_private,
                                            PublicKey remote_static,
                                            SharedSecret& out);
-    void handshake_init(Handshake& hs, const PublicKey& remote_static);
+    void handshake_init(Handshake& hs);
+    void handshake_init(ChainingKey& ck, Hash& hash,
+                        const PublicKey& remote_static);  // 重载版本
 
     // 握手 第一条
     bool create_initiation(Peer& peer, KeypairIndex local_index,
                            HandshakeInitiation& out);
-    Peer* consume_initiation(const HandshakeInitiation& msg, PeerManager peers);
+    Peer* consume_initiation(const HandshakeInitiation& msg,
+                             PeerManager& peers);
 
     // 握手 第二条
     bool create_response(Peer& peer, HandshakeResponse& out);
@@ -270,9 +274,7 @@ class NoiseProtocol {
     static void init_once();
     void derive_keys(DirectionalKey& first_dst, DirectionalKey& second_dst,
                      const ChainingKey& chaining_key, uint64_t birthdate);
-    void handshake_init(Handshake& hs, const PublicKey& remote_static);
-    void handshake_init(ChainingKey& ck, Hash& hash,
-                        const PublicKey& remote_static);  // 重载版本
+
     void mix_hash(Hash& hash, std::span<const uint8_t> src);
     bool mix_dh(ChainingKey& ck, SymmetricKey& key, const PrivateKey& priv,
                 const PublicKey& pub);
