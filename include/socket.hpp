@@ -11,8 +11,6 @@
 #include <vector>
 
 #include "crypto.hpp"
-#include "endpoint.hpp"
-#include "peer.hpp"
 
 // ============================================================================
 // Network I/O and Transport Data Handling

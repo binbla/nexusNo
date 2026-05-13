@@ -114,5 +114,9 @@ void mix_psk(ChainingKey& chaining_key, Hash& hash, SymmetricKey& key,
     mix_hash(hash, temp_hash);
 }
 void derive_transport_keys(ChainingKey& chaining_key, SymmetricKey& key1,
-                           SymmetricKey& key2);
+                           SymmetricKey& key2) {
+    wg::crypto::kdf3(chaining_key, std::span<const uint8_t>{}, chaining_key,
+                     key1, key2);
+    //
+}
 }  // namespace wg::noise

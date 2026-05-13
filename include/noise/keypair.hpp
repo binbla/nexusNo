@@ -32,6 +32,8 @@ struct Keypair {
     // 双端索引
     KeypairIndex local_index = 0;
     KeypairIndex remote_index = 0;
+    // 老大
+    Peer* owner = nullptr;
     // 是否是发起者
     bool i_am_the_initiator = false;
     bool can_send() const { return sending.is_valid; }
@@ -46,6 +48,8 @@ struct Keypair {
     }
 };
 
+// peer --> keypair manager --> keypair --> peer 形成一个环
+// keypair 的注销必须是 keypairmanager 才是管理keypair生命周期的唯一入口。
 class KeypairManager {
     // 三个 keypair 插槽：current/previous/next
    public:

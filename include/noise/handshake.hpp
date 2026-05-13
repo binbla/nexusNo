@@ -20,11 +20,6 @@ struct Handshake {
     KeypairIndex local_index = 0;   // 本端索引
     KeypairIndex remote_index = 0;  // 对端索引：对方包里的 sender_index
 
-    // Noise 握手中间状态
-    // 初始化之后就完成固定
-    PublicKey remote_static{};     // 对端长期公钥
-    SymmetricKey preshared_key{};  // 可选的预共享密钥
-
     // 在clear_runtime的时候会被清空
     PrivateKey ephemeral_private{};  // 本地临时私钥
     PublicKey remote_ephemeral{};    // 对端临时公钥
@@ -32,6 +27,7 @@ struct Handshake {
     // Noise 协议的状态变量，跟握手消息的处理密切相关
     Hash hash{};                 // h
     ChainingKey chaining_key{};  // ck
+    Mac last_mac1{};             // 用于 initiation 消息的 MAC1 验证
 
     // 用于 initiation replay protection
     Timestamp latest_timestamp{};
@@ -53,8 +49,6 @@ struct Handshake {
     void init_for_peer(const PublicKey& remote_pub,
                        const SymmetricKey& psk = {}) {
         clear_runtime();
-        remote_static = remote_pub;
-        preshared_key = psk;
     }
 
     bool is_zeroed() const { return state == HandshakeState::Zeroed; }

@@ -1,0 +1,124 @@
+#ifndef PEER_HPP
+#define PEER_HPP
+
+#include <netinet/in.h>
+
+#include <cstdint>
+#include <cstring>
+#include <map>
+#include <optional>
+#include <string>
+
+#include "noise/handshake.hpp"
+#include "noise/noise.hpp"
+#include "types.hpp"
+
+namespace wg {
+class Endpoint {
+   public:
+    Endpoint();
+
+    static Endpoint from_ipv4(const char* ip, uint16_t port);
+    static Endpoint from_ipv6(const char* ip, uint16_t port);
+
+    sa_family_t family() const;
+
+    const sockaddr* addr() const;
+    socklen_t size() const;
+
+    uint16_t port() const;
+
+    bool operator==(const Endpoint& other) const;
+    static Endpoint from_sockaddr(const sockaddr* addr, socklen_t len);
+
+   private:
+    sockaddr_storage storage_;
+    socklen_t len_;
+};
+
+struct PeerConfig {
+    PublicKey remote_static;
+    PreSharedKey preshared_key{};
+    std::optional<Endpoint> endpoint;
+};
+
+class Peer {
+    // Peer需要掌握的东西：
+    // - 对端长期公钥（身份）
+    // - 可选的预共享密钥
+    // - 预计算的长期静态 DH 结果（precomputed_static_static）
+    // - 预计算的Noise 握手HASH（base_hash）
+    // - 握手状态（Handshake）
+    // - keypair 插槽（KeypairManager）
+   public:
+    explicit Peer(const PeerConfig& config)
+        : remote_static_(config.remote_static),
+          preshared_key_(config.preshared_key),
+          endpoint_(config.endpoint) {}
+
+    // -------- identity / config --------
+
+    const PublicKey& remote_static() const { return remote_static_; }
+    const PreSharedKey& preshared_key() const { return preshared_key_; }
+    void set_preshared_key(const PreSharedKey& psk) { preshared_key_ = psk; }
+
+    // -------- endpoint --------
+
+    const std::optional<Endpoint>& endpoint() const { return endpoint_; }
+    void set_endpoint(const Endpoint& ep) { endpoint_ = ep; }
+    void clear_endpoint() { endpoint_.reset(); }
+
+    // -------- handshake / keypairs --------
+
+    const SharedSecret& precomputed_static_static() const {
+        return precomputed_static_static_;
+    }
+    const Hash& base_hash() const { return base_hash_; }
+    void set_precomputed_static_static(const SharedSecret&);
+    Handshake& handshake() { return handshake_; }  // 返回的是引用，方便外部修改
+    KeypairManager& keypairs() { return keypairs_; }
+
+   private:
+    // peer 的长期身份信息 自己存一个
+    PublicKey remote_static_{};
+    PreSharedKey preshared_key_{};
+    std::optional<Endpoint> endpoint_;
+
+    // 与 peer 绑定的长期预计算缓存也就是secret
+    SharedSecret precomputed_static_static_{};
+    // HASH(H_{init} || S^{pub}_r)，也就是base_hash
+    Hash base_hash_{};
+
+    // 运行时状态 Handshake 和 KeypairManager
+    Handshake handshake_;      // 静态分配空间，避免后续频繁new/delete
+    KeypairManager keypairs_;  // 三槽
+
+    // ===== state =====
+    std::atomic<uint64_t> last_handshake_time{0};  // ns
+
+    // ===== keepalive =====
+    uint16_t keepalive_interval = 0;
+
+    // ===== stats =====
+    uint64_t tx_bytes = 0;
+    uint64_t rx_bytes = 0;
+
+    // ===== runtime =====
+
+    bool is_alive = true;
+};
+
+class PeerManager {
+   public:
+    // 提供查找、添加、删除peer的接口
+    Peer* find_by_public_key(const PublicKey& key);
+    void add_peer(std::unique_ptr<Peer> peer);  // 同时具备update
+    void remove_peer(const PublicKey& key);
+    void clear() { peers_.clear(); }
+
+   private:
+    std::map<PublicKey, std::unique_ptr<Peer>> peers_;
+};
+}  // namespace wg
+
+#endif  // PEER_HPP

@@ -25,8 +25,11 @@ constexpr size_t NONCE_SIZE = 12;      // ChaCha20-Poly1305 nonce size
 constexpr size_t XNONCE_SIZE = 24;     // XChaCha20 nonce size
 constexpr size_t HASH_SIZE = 32;       // BLAKE2s hash output size
 constexpr size_t HMAC_SIZE = 32;       // HMAC-BLAKE2s output size (32 bytes)
-constexpr size_t MAC_SIZE = 16;    // BLAKE2s MAC size (16 bytes for keyed MAC)
-constexpr size_t BLOCK_SIZE = 64;  // BLAKE2s block size
+constexpr size_t MAC_SIZE = 16;     // BLAKE2s MAC size (16 bytes for keyed MAC)
+constexpr size_t COOKIE_SIZE = 16;  // WireGuard cookie size
+constexpr size_t BLOCK_SIZE = 64;   // BLAKE2s block size
+
+constexpr Timestamp kInitiationMinIntervalNs = {0, 1000000000};  // 1 second
 
 using PublicKey = std::array<uint8_t, PUBLIC_KEY_SIZE>;
 using PrivateKey = std::array<uint8_t, PRIVATE_KEY_SIZE>;

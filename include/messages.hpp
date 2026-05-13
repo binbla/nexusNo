@@ -58,7 +58,7 @@ struct CookieReply {
     uint8_t reserved[3];
     KeypairIndex receiver_index;
     XNonce nonce;
-    std::array<uint8_t, 32> encrypted_cookie;
+    std::array<uint8_t, COOKIE_SIZE + TAG_SIZE> encrypted_cookie;
 };
 #pragma pack(pop)
 static_assert(sizeof(CookieReply) == 64);
@@ -77,5 +77,4 @@ struct TransportData {
     TransportDataHeader header;
     std::vector<uint8_t> encrypted_data;
 };
-
 }  // namespace wg

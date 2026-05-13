@@ -243,7 +243,6 @@ void mix_psk(ChainingKey& chaining_key, Hash& hash, SymmetricKey& key,
 /// 该函数只派生 key1/key2，不决定方向。
 void derive_transport_keys(ChainingKey& chaining_key, SymmetricKey& key1,
                            SymmetricKey& key2);
-
 }  // namespace wg::noise
 
 #endif  // NOISE_HPP
